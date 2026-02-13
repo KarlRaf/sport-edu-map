@@ -3,24 +3,27 @@ const DATASET_BASE_URL =
 const DATASET_PAGE_SIZE = 100;
 const OSM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const RESULT_COUNT = 10;
-const AUTOCOMPLETE_LIMIT = 5;
-const AUTOCOMPLETE_MIN_CHARS = 3;
-const AUTOCOMPLETE_DEBOUNCE_MS = 350;
+const AUTOCOMPLETE_LIMIT = 6;
+const AUTOCOMPLETE_MIN_CHARS = 2;
+const AUTOCOMPLETE_DEBOUNCE_MS = 220;
 
 const form = document.getElementById("search-form");
 const addressInput = document.getElementById("address");
-const suggestionsList = document.getElementById("address-suggestions");
+const suggestionsEl = document.getElementById("suggestions");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 
 let selectedPlace = null;
-let latestSuggestionRequest = 0;
+let currentSuggestions = [];
+let suggestionAbortController = null;
 let inputDebounceTimer = null;
+const suggestionCache = new Map();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const address = addressInput.value.trim();
+  hideSuggestions();
 
+  const address = addressInput.value.trim();
   if (!address) {
     setStatus("Veuillez saisir une adresse.");
     return;
@@ -74,53 +77,88 @@ addressInput.addEventListener("input", () => {
   }
 
   if (query.length < AUTOCOMPLETE_MIN_CHARS) {
-    clearSuggestions();
+    hideSuggestions();
     return;
   }
 
   inputDebounceTimer = setTimeout(() => {
-    fetchAddressSuggestions(query).catch(() => {
-      clearSuggestions();
+    fetchAddressSuggestions(query).catch((error) => {
+      if (error.name !== "AbortError") {
+        hideSuggestions();
+      }
     });
   }, AUTOCOMPLETE_DEBOUNCE_MS);
 });
 
-addressInput.addEventListener("change", () => {
-  const selectedLabel = addressInput.value.trim();
-  if (!selectedLabel) {
-    selectedPlace = null;
+addressInput.addEventListener("blur", () => {
+  setTimeout(() => {
+    hideSuggestions();
+  }, 120);
+});
+
+addressInput.addEventListener("focus", () => {
+  if (currentSuggestions.length) {
+    showSuggestions();
+  }
+});
+
+suggestionsEl.addEventListener("pointerdown", (event) => {
+  const button = event.target.closest("button[data-index]");
+  if (!button) {
     return;
   }
 
-  const option = suggestionsList.querySelector(`option[value="${cssEscape(selectedLabel)}"]`);
-  if (!option) {
-    selectedPlace = null;
+  const place = currentSuggestions[Number(button.dataset.index)];
+  if (!place) {
     return;
   }
 
-  selectedPlace = {
-    lat: Number(option.dataset.lat),
-    lon: Number(option.dataset.lon),
-    label: option.dataset.label || selectedLabel,
-  };
+  event.preventDefault();
+  selectPlace(place);
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".autocomplete-wrap")) {
+    hideSuggestions();
+  }
 });
 
 async function getUserPosition(address) {
-  if (selectedPlace) {
+  if (selectedPlace && selectedPlace.label === address) {
     return selectedPlace;
   }
+
+  const exactMatch = currentSuggestions.find((place) => place.label === address);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
   return geocodeAddress(address);
 }
 
 async function fetchAddressSuggestions(query) {
-  const requestId = ++latestSuggestionRequest;
-  const places = await searchNominatim(query, AUTOCOMPLETE_LIMIT);
+  const cacheKey = query.toLowerCase();
 
-  if (requestId !== latestSuggestionRequest) {
+  if (suggestionCache.has(cacheKey)) {
+    currentSuggestions = suggestionCache.get(cacheKey);
+    renderSuggestions(currentSuggestions);
     return;
   }
 
-  renderSuggestions(places);
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+  }
+
+  suggestionAbortController = new AbortController();
+  const places = await searchNominatim(
+    query,
+    AUTOCOMPLETE_LIMIT,
+    suggestionAbortController.signal
+  );
+
+  suggestionCache.set(cacheKey, places);
+  currentSuggestions = places;
+  renderSuggestions(currentSuggestions);
 }
 
 async function geocodeAddress(address) {
@@ -134,18 +172,18 @@ async function geocodeAddress(address) {
   return first;
 }
 
-async function searchNominatim(query, limit) {
+async function searchNominatim(query, limit, signal) {
   const url = new URL(OSM_SEARCH_URL);
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("addressdetails", "1");
   url.searchParams.set("countrycodes", "fr");
   url.searchParams.set("limit", String(limit));
+  url.searchParams.set("accept-language", "fr");
   url.searchParams.set("q", query);
 
   const response = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
+    headers: { Accept: "application/json" },
+    signal,
   });
 
   if (!response.ok) {
@@ -161,20 +199,42 @@ async function searchNominatim(query, limit) {
 }
 
 function renderSuggestions(places) {
-  clearSuggestions();
+  suggestionsEl.innerHTML = "";
 
-  for (const place of places) {
-    const option = document.createElement("option");
-    option.value = place.label;
-    option.dataset.label = place.label;
-    option.dataset.lat = String(place.lat);
-    option.dataset.lon = String(place.lon);
-    suggestionsList.appendChild(option);
+  if (!places.length) {
+    hideSuggestions();
+    return;
   }
+
+  places.forEach((place, index) => {
+    const li = document.createElement("li");
+    li.className = "suggestion-item";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "suggestion-btn";
+    button.dataset.index = String(index);
+    button.textContent = place.label;
+
+    li.appendChild(button);
+    suggestionsEl.appendChild(li);
+  });
+
+  showSuggestions();
 }
 
-function clearSuggestions() {
-  suggestionsList.innerHTML = "";
+function selectPlace(place) {
+  selectedPlace = place;
+  addressInput.value = place.label;
+  hideSuggestions();
+}
+
+function hideSuggestions() {
+  suggestionsEl.classList.add("hidden");
+}
+
+function showSuggestions() {
+  suggestionsEl.classList.remove("hidden");
 }
 
 async function fetchInstitutions() {
@@ -290,11 +350,4 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function cssEscape(value) {
-  if (window.CSS && typeof window.CSS.escape === "function") {
-    return window.CSS.escape(value);
-  }
-  return value.replace(/"/g, "\\\"");
 }

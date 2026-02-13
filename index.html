@@ -14,16 +14,17 @@
 
       <form id="search-form" class="search-form">
         <label for="address">Adresse</label>
-        <input
-          id="address"
-          name="address"
-          type="text"
-          list="address-suggestions"
-          placeholder="Ex. : 10 rue de Rivoli, Paris"
-          autocomplete="off"
-          required
-        />
-        <datalist id="address-suggestions"></datalist>
+        <div class="autocomplete-wrap">
+          <input
+            id="address"
+            name="address"
+            type="text"
+            placeholder="Ex. : 10 rue de Rivoli, Paris"
+            autocomplete="off"
+            required
+          />
+          <ul id="suggestions" class="suggestions hidden" role="listbox" aria-label="Suggestions d'adresses"></ul>
+        </div>
         <button type="submit">Rechercher</button>
       </form>
 
