@@ -40,6 +40,22 @@
         <button type="submit">Rechercher</button>
       </form>
 
+      <section class="filters" aria-label="Filtres">
+        <div class="filter-field">
+          <label for="filter-type">Type d'établissement</label>
+          <select id="filter-type" name="filter-type">
+            <option value="all">Tous</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-sport">Sport</label>
+          <select id="filter-sport" name="filter-sport">
+            <option value="all">Tous</option>
+          </select>
+        </div>
+        <button id="clear-filters" type="button" class="clear-filters">Réinitialiser</button>
+      </section>
+
       <section class="legend" aria-label="Légende des couleurs">
         <p class="legend-title">Légende</p>
         <div class="legend-row">

@@ -13,6 +13,9 @@ const suggestionsEl = document.getElementById("suggestions");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const mapEl = document.getElementById("map");
+const filterTypeEl = document.getElementById("filter-type");
+const filterSportEl = document.getElementById("filter-sport");
+const clearFiltersBtn = document.getElementById("clear-filters");
 
 let selectedPlace = null;
 let currentSuggestions = [];
@@ -21,6 +24,10 @@ let inputDebounceTimer = null;
 const suggestionCache = new Map();
 let map = null;
 let mapLayerGroup = null;
+let cachedInstitutions = null;
+let latestUserPosition = null;
+let latestRankedInstitutions = [];
+let filtersInitialized = false;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -40,14 +47,15 @@ form.addEventListener("submit", async (event) => {
     const userPosition = await getUserPosition(address);
 
     setStatus("Chargement des établissements...");
-    const institutions = await fetchInstitutions();
+    const institutions = await fetchInstitutionsCached();
 
     if (!institutions.length) {
       setStatus("Aucune donnée d'établissement disponible.");
       return;
     }
 
-    const nearest = institutions
+    latestUserPosition = userPosition;
+    latestRankedInstitutions = institutions
       .map((item) => ({
         ...item,
         distanceKm: haversineKm(
@@ -57,19 +65,33 @@ form.addEventListener("submit", async (event) => {
           item.position.lon
         ),
       }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, RESULT_COUNT);
+      .sort((a, b) => a.distanceKm - b.distanceKm);
 
-    renderResults(nearest);
-    renderMap(userPosition, nearest);
-    setStatus(
-      `${nearest.length} établissement(s) les plus proches de « ${userPosition.label} ».`
-    );
+    if (!filtersInitialized) {
+      initializeFilters(institutions);
+      filtersInitialized = true;
+    }
+
+    updateResultsView();
   } catch (error) {
     setStatus(error.message || "Une erreur est survenue.");
   } finally {
     setLoading(false);
   }
+});
+
+filterTypeEl.addEventListener("change", () => {
+  updateResultsView();
+});
+
+filterSportEl.addEventListener("change", () => {
+  updateResultsView();
+});
+
+clearFiltersBtn.addEventListener("click", () => {
+  filterTypeEl.value = "all";
+  filterSportEl.value = "all";
+  updateResultsView();
 });
 
 addressInput.addEventListener("input", () => {
@@ -241,6 +263,73 @@ function showSuggestions() {
   suggestionsEl.classList.remove("hidden");
 }
 
+function initializeFilters(institutions) {
+  const types = Array.from(
+    new Set(
+      institutions
+        .map((item) => (item.type_etablissement || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "fr"));
+
+  const sports = Array.from(
+    new Set(
+      institutions
+        .flatMap((item) => (Array.isArray(item.pratique_proposee) ? item.pratique_proposee : []))
+        .map((sport) => String(sport).trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "fr"));
+
+  appendFilterOptions(filterTypeEl, types);
+  appendFilterOptions(filterSportEl, sports);
+}
+
+function appendFilterOptions(selectEl, options) {
+  options.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    selectEl.appendChild(option);
+  });
+}
+
+function updateResultsView() {
+  if (!latestUserPosition || !latestRankedInstitutions.length) {
+    return;
+  }
+
+  const filteredInstitutions = applyFilters(latestRankedInstitutions);
+  const nearest = filteredInstitutions.slice(0, RESULT_COUNT);
+
+  renderResults(nearest);
+  renderMap(latestUserPosition, nearest);
+
+  if (!nearest.length) {
+    setStatus("Aucun établissement trouvé avec les filtres sélectionnés.");
+    return;
+  }
+
+  setStatus(
+    `${nearest.length} établissement(s) les plus proches de « ${latestUserPosition.label} ».`
+  );
+}
+
+function applyFilters(items) {
+  const selectedType = filterTypeEl.value;
+  const selectedSport = filterSportEl.value;
+
+  return items.filter((item) => {
+    const typeMatch =
+      selectedType === "all" || (item.type_etablissement || "") === selectedType;
+    const sportMatch =
+      selectedSport === "all" ||
+      (Array.isArray(item.pratique_proposee) &&
+        item.pratique_proposee.includes(selectedSport));
+    return typeMatch && sportMatch;
+  });
+}
+
 function ensureMap() {
   if (!mapEl || !window.L) {
     return false;
@@ -339,6 +428,15 @@ async function fetchInstitutions() {
   }
 
   return allResults.filter((item) => item.position?.lat && item.position?.lon);
+}
+
+async function fetchInstitutionsCached() {
+  if (cachedInstitutions) {
+    return cachedInstitutions;
+  }
+
+  cachedInstitutions = await fetchInstitutions();
+  return cachedInstitutions;
 }
 
 function renderResults(items) {
