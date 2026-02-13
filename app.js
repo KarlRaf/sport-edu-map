@@ -12,12 +12,15 @@ const addressInput = document.getElementById("address");
 const suggestionsEl = document.getElementById("suggestions");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
+const mapEl = document.getElementById("map");
 
 let selectedPlace = null;
 let currentSuggestions = [];
 let suggestionAbortController = null;
 let inputDebounceTimer = null;
 const suggestionCache = new Map();
+let map = null;
+let mapLayerGroup = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -58,6 +61,7 @@ form.addEventListener("submit", async (event) => {
       .slice(0, RESULT_COUNT);
 
     renderResults(nearest);
+    renderMap(userPosition, nearest);
     setStatus(
       `${nearest.length} établissement(s) les plus proches de « ${userPosition.label} ».`
     );
@@ -235,6 +239,79 @@ function hideSuggestions() {
 
 function showSuggestions() {
   suggestionsEl.classList.remove("hidden");
+}
+
+function ensureMap() {
+  if (!mapEl || !window.L) {
+    return false;
+  }
+
+  if (map) {
+    return true;
+  }
+
+  map = window.L.map(mapEl, {
+    zoomControl: true,
+  }).setView([46.603354, 1.888334], 6);
+
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+
+  mapLayerGroup = window.L.layerGroup().addTo(map);
+  return true;
+}
+
+function renderMap(userPosition, institutions) {
+  if (!ensureMap()) {
+    return;
+  }
+
+  mapLayerGroup.clearLayers();
+
+  const points = [];
+  const userLatLng = [userPosition.lat, userPosition.lon];
+  points.push(userLatLng);
+
+  const userMarker = window.L.circleMarker(userLatLng, {
+    radius: 9,
+    color: "#1d4ed8",
+    fillColor: "#2563eb",
+    fillOpacity: 0.95,
+    weight: 2,
+  }).bindPopup(`<strong>Votre adresse</strong><br>${escapeHtml(userPosition.label)}`);
+  userMarker.addTo(mapLayerGroup);
+
+  institutions.forEach((item) => {
+    const latLng = [item.position.lat, item.position.lon];
+    points.push(latLng);
+    const onisepLink = item.fiche_onisep
+      ? `<br><a href="${escapeHtml(item.fiche_onisep)}" target="_blank" rel="noreferrer">Fiche Onisep</a>`
+      : "";
+    const websiteLink = item.web
+      ? `<br><a href="${escapeHtml(item.web)}" target="_blank" rel="noreferrer">Site web</a>`
+      : "";
+
+    const marker = window.L.circleMarker(latLng, {
+      radius: 7,
+      color: "#0f766e",
+      fillColor: "#14b8a6",
+      fillOpacity: 0.9,
+      weight: 2,
+    }).bindPopup(
+      `<strong>${escapeHtml(item.nom_etablissement || "Établissement")}</strong><br>` +
+        `${escapeHtml(item.nom_commune || "-")}, ${escapeHtml(item.libelle_departement || "-")}<br>` +
+        `Distance : ${escapeHtml(formatDistance(item.distanceKm))}` +
+        websiteLink +
+        onisepLink
+    );
+
+    marker.addTo(mapLayerGroup);
+  });
+
+  const bounds = window.L.latLngBounds(points);
+  map.fitBounds(bounds, { padding: [24, 24] });
 }
 
 async function fetchInstitutions() {
