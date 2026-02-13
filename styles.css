@@ -331,6 +331,25 @@ button:disabled {
   text-decoration: underline;
 }
 
+.app-footer {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.app-footer a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
 @media (min-width: 760px) {
   .app {
     margin: 30px auto;
