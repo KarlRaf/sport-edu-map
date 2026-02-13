@@ -276,18 +276,20 @@ function renderResults(items) {
     const li = document.createElement("li");
     li.className = "result-item";
 
-    const sports = Array.isArray(item.pratique_proposee)
-      ? item.pratique_proposee.join(", ")
-      : "Non renseigné";
+    const type = item.type_etablissement || "Autre";
+    const typeClass = getTypeClass(type);
+    const sportsChips = renderSportsChips(item.pratique_proposee);
 
     li.innerHTML = `
       <h2>${escapeHtml(item.nom_etablissement || "Établissement inconnu")}</h2>
       <p class="meta"><strong>Distance :</strong> ${formatDistance(item.distanceKm)}</p>
-      <p class="meta"><strong>Type :</strong> ${escapeHtml(item.type_etablissement || "-")}</p>
+      <p class="meta inline-row"><strong>Type :</strong> <span class="badge ${typeClass}">${escapeHtml(
+      type
+    )}</span></p>
       <p class="meta"><strong>Localisation :</strong> ${escapeHtml(
         `${item.nom_commune || "-"}, ${item.libelle_departement || "-"}`
       )}</p>
-      <p class="meta"><strong>Sports :</strong> ${escapeHtml(sports)}</p>
+      <div class="meta"><strong>Sports :</strong><div class="chips">${sportsChips}</div></div>
       <div class="links">
         ${item.web ? `<a href="${item.web}" target="_blank" rel="noreferrer">Site web</a>` : ""}
         ${
@@ -300,6 +302,89 @@ function renderResults(items) {
 
     resultsEl.appendChild(li);
   }
+}
+
+function getTypeClass(typeLabel) {
+  const normalized = normalizeText(typeLabel);
+  if (normalized.includes("lycee")) {
+    return "badge-type-lycee";
+  }
+  if (normalized.includes("college")) {
+    return "badge-type-college";
+  }
+  return "badge-type-other";
+}
+
+function renderSportsChips(sports) {
+  if (!Array.isArray(sports) || !sports.length) {
+    return `<span class="chip chip-other">Non renseigné</span>`;
+  }
+
+  return sports
+    .map((sport) => {
+      const category = getSportCategory(sport);
+      return `<span class="chip ${category.className}">${escapeHtml(sport)}</span>`;
+    })
+    .join("");
+}
+
+function getSportCategory(sportName) {
+  const value = normalizeText(sportName);
+
+  if (
+    value.includes("football") ||
+    value.includes("basket") ||
+    value.includes("handball") ||
+    value.includes("rugby") ||
+    value.includes("volley") ||
+    value.includes("hockey")
+  ) {
+    return { className: "chip-team" };
+  }
+
+  if (
+    value.includes("judo") ||
+    value.includes("lutte") ||
+    value.includes("boxe") ||
+    value.includes("karate") ||
+    value.includes("taekwondo") ||
+    value.includes("escrime")
+  ) {
+    return { className: "chip-combat" };
+  }
+
+  if (
+    value.includes("natation") ||
+    value.includes("canoe") ||
+    value.includes("kayak") ||
+    value.includes("aviron") ||
+    value.includes("voile") ||
+    value.includes("plongee")
+  ) {
+    return { className: "chip-water" };
+  }
+
+  if (
+    value.includes("ski") ||
+    value.includes("biathlon") ||
+    value.includes("snowboard") ||
+    value.includes("alpinisme") ||
+    value.includes("escalade")
+  ) {
+    return { className: "chip-winter" };
+  }
+
+  if (
+    value.includes("athletisme") ||
+    value.includes("triathlon") ||
+    value.includes("cyclisme") ||
+    value.includes("course") ||
+    value.includes("marathon")
+  ) {
+    return { className: "chip-endurance" };
+  }
+
+  return { className: "chip-other" };
 }
 
 function setLoading(isLoading) {
@@ -341,6 +426,13 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 function toRad(value) {
   return (value * Math.PI) / 180;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function escapeHtml(value) {

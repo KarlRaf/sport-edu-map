@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Établissements sport-études les plus proches</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -27,6 +33,25 @@
         </div>
         <button type="submit">Rechercher</button>
       </form>
+
+      <section class="legend" aria-label="Légende des couleurs">
+        <p class="legend-title">Légende</p>
+        <div class="legend-row">
+          <span class="legend-label">Type :</span>
+          <span class="badge badge-type-lycee">Lycée</span>
+          <span class="badge badge-type-college">Collège</span>
+          <span class="badge badge-type-other">Autre</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-label">Sports :</span>
+          <span class="chip chip-team">Collectif</span>
+          <span class="chip chip-combat">Combat</span>
+          <span class="chip chip-water">Eau</span>
+          <span class="chip chip-winter">Montagne/Hiver</span>
+          <span class="chip chip-endurance">Endurance</span>
+          <span class="chip chip-other">Autre</span>
+        </div>
+      </section>
 
       <p id="status" class="status" aria-live="polite"></p>
       <ol id="results" class="results"></ol>
