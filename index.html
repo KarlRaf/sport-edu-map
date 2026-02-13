@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Établissements sport-études les plus proches</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Trouver un établissement sport-études proche</h1>
+      <p class="subtitle">Saisissez une adresse en France pour obtenir les établissements les plus proches.</p>
+      <p class="subtitle">L'autocomplétion et le géocodage sont fournis par OpenStreetMap (Nominatim).</p>
+
+      <form id="search-form" class="search-form">
+        <label for="address">Adresse</label>
+        <input
+          id="address"
+          name="address"
+          type="text"
+          list="address-suggestions"
+          placeholder="Ex. : 10 rue de Rivoli, Paris"
+          autocomplete="off"
+          required
+        />
+        <datalist id="address-suggestions"></datalist>
+        <button type="submit">Rechercher</button>
+      </form>
+
+      <p id="status" class="status" aria-live="polite"></p>
+      <ol id="results" class="results"></ol>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
