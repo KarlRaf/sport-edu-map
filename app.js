@@ -1,8 +1,25 @@
-const DATASET_BASE_URL =
-  "https://dataeducation.opendatasoft.com/api/explore/v2.1/catalog/datasets/fr-en-sport-etudes/records";
+const DATASET_CONFIG = {
+  sport_etudes: {
+    label: "Sport-études",
+    endpoint:
+      "https://dataeducation.opendatasoft.com/api/explore/v2.1/catalog/datasets/fr-en-sport-etudes/records",
+    sportsField: "pratique_proposee",
+    sourceClass: "badge-source-sport-etudes",
+    marker: { color: "#1d4ed8", fill: "#2563eb" },
+  },
+  sections_sportives: {
+    label: "Sections sportives scolaires",
+    endpoint:
+      "https://dataeducation.opendatasoft.com/api/explore/v2.1/catalog/datasets/sections-sportives-scolaires/records",
+    sportsField: "sections_scolaires",
+    sourceClass: "badge-source-sections",
+    marker: { color: "#0f766e", fill: "#14b8a6" },
+  },
+};
 const DATASET_PAGE_SIZE = 100;
 const OSM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
-const RESULT_COUNT = 10;
+const DEFAULT_RESULT_COUNT = 10;
+const DEFAULT_PRESEARCH_PAGE_SIZE = 50;
 const AUTOCOMPLETE_LIMIT = 6;
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_DEBOUNCE_MS = 220;
@@ -13,9 +30,13 @@ const suggestionsEl = document.getElementById("suggestions");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const mapEl = document.getElementById("map");
+const filterDatasetEl = document.getElementById("filter-dataset");
 const filterTypeEl = document.getElementById("filter-type");
 const filterSportEl = document.getElementById("filter-sport");
+const filterCountEl = document.getElementById("filter-count");
 const clearFiltersBtn = document.getElementById("clear-filters");
+const listControlsEl = document.getElementById("list-controls");
+const loadMoreBtn = document.getElementById("load-more");
 
 let selectedPlace = null;
 let currentSuggestions = [];
@@ -24,10 +45,10 @@ let inputDebounceTimer = null;
 const suggestionCache = new Map();
 let map = null;
 let mapLayerGroup = null;
-let cachedInstitutions = null;
+const datasetCache = new Map();
 let latestUserPosition = null;
-let latestRankedInstitutions = [];
-let filtersInitialized = false;
+let latestBaseInstitutions = [];
+let listDisplayLimit = DEFAULT_PRESEARCH_PAGE_SIZE;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -45,34 +66,21 @@ form.addEventListener("submit", async (event) => {
   try {
     setStatus("Géocodage de l'adresse...");
     const userPosition = await getUserPosition(address);
+    await loadInstitutionsForCurrentMode(userPosition);
+  } catch (error) {
+    setStatus(error.message || "Une erreur est survenue.");
+  } finally {
+    setLoading(false);
+  }
+});
 
-    setStatus("Chargement des établissements...");
-    const institutions = await fetchInstitutionsCached();
+filterDatasetEl.addEventListener("change", async () => {
+  setLoading(true);
+  clearResults();
 
-    if (!institutions.length) {
-      setStatus("Aucune donnée d'établissement disponible.");
-      return;
-    }
-
-    latestUserPosition = userPosition;
-    latestRankedInstitutions = institutions
-      .map((item) => ({
-        ...item,
-        distanceKm: haversineKm(
-          userPosition.lat,
-          userPosition.lon,
-          item.position.lat,
-          item.position.lon
-        ),
-      }))
-      .sort((a, b) => a.distanceKm - b.distanceKm);
-
-    if (!filtersInitialized) {
-      initializeFilters(institutions);
-      filtersInitialized = true;
-    }
-
-    updateResultsView();
+  try {
+    listDisplayLimit = DEFAULT_PRESEARCH_PAGE_SIZE;
+    await loadInstitutionsForCurrentMode(latestUserPosition);
   } catch (error) {
     setStatus(error.message || "Une erreur est survenue.");
   } finally {
@@ -81,16 +89,43 @@ form.addEventListener("submit", async (event) => {
 });
 
 filterTypeEl.addEventListener("change", () => {
+  if (!latestUserPosition) {
+    listDisplayLimit = DEFAULT_PRESEARCH_PAGE_SIZE;
+  }
   updateResultsView();
 });
 
 filterSportEl.addEventListener("change", () => {
+  if (!latestUserPosition) {
+    listDisplayLimit = DEFAULT_PRESEARCH_PAGE_SIZE;
+  }
+  updateResultsView();
+});
+
+filterCountEl.addEventListener("change", () => {
   updateResultsView();
 });
 
 clearFiltersBtn.addEventListener("click", () => {
+  filterDatasetEl.value = "sport_etudes";
   filterTypeEl.value = "all";
   filterSportEl.value = "all";
+  filterCountEl.value = String(DEFAULT_RESULT_COUNT);
+  listDisplayLimit = DEFAULT_PRESEARCH_PAGE_SIZE;
+
+  setLoading(true);
+  clearResults();
+  loadInstitutionsForCurrentMode(latestUserPosition)
+    .catch((error) => {
+      setStatus(error.message || "Une erreur est survenue.");
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+});
+
+loadMoreBtn.addEventListener("click", () => {
+  listDisplayLimit += DEFAULT_PRESEARCH_PAGE_SIZE;
   updateResultsView();
 });
 
@@ -263,7 +298,63 @@ function showSuggestions() {
   suggestionsEl.classList.remove("hidden");
 }
 
+async function loadInstitutionsForCurrentMode(userPosition) {
+  setStatus("Chargement des établissements...");
+  const institutions = await fetchInstitutionsBySelection(getSelectedDatasetKey());
+
+  if (!institutions.length) {
+    setStatus("Aucune donnée d'établissement disponible.");
+    latestBaseInstitutions = [];
+    renderMap(null, []);
+    toggleListControls(0, 0);
+    return;
+  }
+
+  latestUserPosition = userPosition;
+  if (userPosition) {
+    latestBaseInstitutions = institutions
+      .map((item) => ({
+        ...item,
+        distanceKm: haversineKm(
+          userPosition.lat,
+          userPosition.lon,
+          item.position.lat,
+          item.position.lon
+        ),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+  } else {
+    latestBaseInstitutions = [...institutions].sort((a, b) => {
+      const nameA = String(a.nom_etablissement || "");
+      const nameB = String(b.nom_etablissement || "");
+      return nameA.localeCompare(nameB, "fr");
+    });
+  }
+
+  initializeFilters(institutions);
+  updateResultsView();
+}
+
+function isDistanceMode() {
+  return Boolean(latestUserPosition);
+}
+
+function getSelectedDatasetKey() {
+  return filterDatasetEl.value;
+}
+
+function getSelectedDatasetLabel() {
+  const selected = getSelectedDatasetKey();
+  if (selected === "all") {
+    return "Toutes les sources";
+  }
+  return DATASET_CONFIG[selected]?.label || "Source inconnue";
+}
+
 function initializeFilters(institutions) {
+  const previousType = filterTypeEl.value;
+  const previousSport = filterSportEl.value;
+
   const types = Array.from(
     new Set(
       institutions
@@ -275,17 +366,27 @@ function initializeFilters(institutions) {
   const sports = Array.from(
     new Set(
       institutions
-        .flatMap((item) => (Array.isArray(item.pratique_proposee) ? item.pratique_proposee : []))
+        .flatMap((item) => (Array.isArray(item.sports) ? item.sports : []))
         .map((sport) => String(sport).trim())
         .filter(Boolean)
     )
   ).sort((a, b) => a.localeCompare(b, "fr"));
 
-  appendFilterOptions(filterTypeEl, types);
-  appendFilterOptions(filterSportEl, sports);
+  resetAndAppendFilterOptions(filterTypeEl, types);
+  resetAndAppendFilterOptions(filterSportEl, sports);
+
+  if (previousType !== "all" && types.includes(previousType)) {
+    filterTypeEl.value = previousType;
+  }
+
+  if (previousSport !== "all" && sports.includes(previousSport)) {
+    filterSportEl.value = previousSport;
+  }
 }
 
-function appendFilterOptions(selectEl, options) {
+function resetAndAppendFilterOptions(selectEl, options) {
+  selectEl.innerHTML = '<option value="all">Tous</option>';
+
   options.forEach((value) => {
     const option = document.createElement("option");
     option.value = value;
@@ -295,24 +396,61 @@ function appendFilterOptions(selectEl, options) {
 }
 
 function updateResultsView() {
-  if (!latestUserPosition || !latestRankedInstitutions.length) {
+  if (!latestBaseInstitutions.length) {
     return;
   }
 
-  const filteredInstitutions = applyFilters(latestRankedInstitutions);
-  const nearest = filteredInstitutions.slice(0, RESULT_COUNT);
+  syncModeUi();
+  const filteredInstitutions = applyFilters(latestBaseInstitutions);
+  const displayLimit = isDistanceMode()
+    ? getSelectedResultCount()
+    : listDisplayLimit;
+  const displayedInstitutions = filteredInstitutions.slice(0, displayLimit);
+  const sourceLabel = getSelectedDatasetLabel();
 
-  renderResults(nearest);
-  renderMap(latestUserPosition, nearest);
+  renderResults(displayedInstitutions);
+  renderMap(latestUserPosition, displayedInstitutions);
+  toggleListControls(filteredInstitutions.length, displayedInstitutions.length);
 
-  if (!nearest.length) {
+  if (!displayedInstitutions.length) {
     setStatus("Aucun établissement trouvé avec les filtres sélectionnés.");
     return;
   }
 
+  if (isDistanceMode()) {
+    setStatus(
+      `${displayedInstitutions.length} établissement(s) les plus proches de « ${latestUserPosition.label} » (${sourceLabel}).`
+    );
+    return;
+  }
+
   setStatus(
-    `${nearest.length} établissement(s) les plus proches de « ${latestUserPosition.label} ».`
+    `${displayedInstitutions.length}/${filteredInstitutions.length} établissement(s) affiché(s) (${sourceLabel}). Ajoutez une adresse pour trier par distance.`
   );
+}
+
+function getSelectedResultCount() {
+  const parsed = Number.parseInt(filterCountEl.value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_RESULT_COUNT;
+  }
+  return parsed;
+}
+
+function toggleListControls(totalCount, shownCount) {
+  if (isDistanceMode()) {
+    listControlsEl.classList.add("hidden");
+    return;
+  }
+
+  const hasMore = shownCount < totalCount;
+  loadMoreBtn.classList.toggle("hidden", !hasMore);
+  listControlsEl.classList.toggle("hidden", !hasMore);
+}
+
+function syncModeUi() {
+  const listMode = !isDistanceMode();
+  filterCountEl.disabled = listMode;
 }
 
 function applyFilters(items) {
@@ -324,8 +462,7 @@ function applyFilters(items) {
       selectedType === "all" || (item.type_etablissement || "") === selectedType;
     const sportMatch =
       selectedSport === "all" ||
-      (Array.isArray(item.pratique_proposee) &&
-        item.pratique_proposee.includes(selectedSport));
+      (Array.isArray(item.sports) && item.sports.includes(selectedSport));
     return typeMatch && sportMatch;
   });
 }
@@ -360,21 +497,24 @@ function renderMap(userPosition, institutions) {
   mapLayerGroup.clearLayers();
 
   const points = [];
-  const userLatLng = [userPosition.lat, userPosition.lon];
-  points.push(userLatLng);
+  if (userPosition) {
+    const userLatLng = [userPosition.lat, userPosition.lon];
+    points.push(userLatLng);
 
-  const userMarker = window.L.circleMarker(userLatLng, {
-    radius: 9,
-    color: "#1d4ed8",
-    fillColor: "#2563eb",
-    fillOpacity: 0.95,
-    weight: 2,
-  }).bindPopup(`<strong>Votre adresse</strong><br>${escapeHtml(userPosition.label)}`);
-  userMarker.addTo(mapLayerGroup);
+    const userMarker = window.L.circleMarker(userLatLng, {
+      radius: 9,
+      color: "#1d4ed8",
+      fillColor: "#2563eb",
+      fillOpacity: 0.95,
+      weight: 2,
+    }).bindPopup(`<strong>Votre adresse</strong><br>${escapeHtml(userPosition.label)}`);
+    userMarker.addTo(mapLayerGroup);
+  }
 
   institutions.forEach((item) => {
     const latLng = [item.position.lat, item.position.lon];
     points.push(latLng);
+    const sourceConfig = DATASET_CONFIG[item.datasetKey] || DATASET_CONFIG.sport_etudes;
     const onisepLink = item.fiche_onisep
       ? `<br><a href="${escapeHtml(item.fiche_onisep)}" target="_blank" rel="noreferrer">Fiche Onisep</a>`
       : "";
@@ -384,14 +524,15 @@ function renderMap(userPosition, institutions) {
 
     const marker = window.L.circleMarker(latLng, {
       radius: 7,
-      color: "#0f766e",
-      fillColor: "#14b8a6",
+      color: sourceConfig.marker.color,
+      fillColor: sourceConfig.marker.fill,
       fillOpacity: 0.9,
       weight: 2,
     }).bindPopup(
       `<strong>${escapeHtml(item.nom_etablissement || "Établissement")}</strong><br>` +
         `${escapeHtml(item.nom_commune || "-")}, ${escapeHtml(item.libelle_departement || "-")}<br>` +
-        `Distance : ${escapeHtml(formatDistance(item.distanceKm))}` +
+        `Source : ${escapeHtml(sourceConfig.label)}<br>` +
+        `${Number.isFinite(item.distanceKm) ? `Distance : ${escapeHtml(formatDistance(item.distanceKm))}<br>` : ""}` +
         websiteLink +
         onisepLink
     );
@@ -399,17 +540,31 @@ function renderMap(userPosition, institutions) {
     marker.addTo(mapLayerGroup);
   });
 
+  if (!points.length) {
+    map.setView([46.603354, 1.888334], 6);
+    return;
+  }
+
   const bounds = window.L.latLngBounds(points);
   map.fitBounds(bounds, { padding: [24, 24] });
 }
 
-async function fetchInstitutions() {
+async function fetchDatasetRecords(datasetKey) {
+  if (datasetCache.has(datasetKey)) {
+    return datasetCache.get(datasetKey);
+  }
+
+  const config = DATASET_CONFIG[datasetKey];
+  if (!config) {
+    return [];
+  }
+
   let offset = 0;
   let totalCount = Infinity;
   const allResults = [];
 
   while (offset < totalCount) {
-    const url = `${DATASET_BASE_URL}?limit=${DATASET_PAGE_SIZE}&offset=${offset}`;
+    const url = `${config.endpoint}?limit=${DATASET_PAGE_SIZE}&offset=${offset}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Échec du chargement des établissements.");
@@ -427,16 +582,33 @@ async function fetchInstitutions() {
     }
   }
 
-  return allResults.filter((item) => item.position?.lat && item.position?.lon);
+  const normalized = allResults
+    .filter((item) => item.position?.lat && item.position?.lon)
+    .map((item) => normalizeInstitution(item, datasetKey, config.sportsField));
+
+  datasetCache.set(datasetKey, normalized);
+  return normalized;
 }
 
-async function fetchInstitutionsCached() {
-  if (cachedInstitutions) {
-    return cachedInstitutions;
+async function fetchInstitutionsBySelection(selection) {
+  if (selection === "all") {
+    const [sportEtudes, sectionsSportives] = await Promise.all([
+      fetchDatasetRecords("sport_etudes"),
+      fetchDatasetRecords("sections_sportives"),
+    ]);
+    return [...sportEtudes, ...sectionsSportives];
   }
 
-  cachedInstitutions = await fetchInstitutions();
-  return cachedInstitutions;
+  return fetchDatasetRecords(selection);
+}
+
+function normalizeInstitution(raw, datasetKey, sportsField) {
+  const sports = Array.isArray(raw[sportsField]) ? raw[sportsField] : [];
+  return {
+    ...raw,
+    datasetKey,
+    sports,
+  };
 }
 
 function renderResults(items) {
@@ -453,11 +625,18 @@ function renderResults(items) {
 
     const type = item.type_etablissement || "Autre";
     const typeClass = getTypeClass(type);
-    const sportsChips = renderSportsChips(item.pratique_proposee);
+    const sportsChips = renderSportsChips(item.sports);
+    const sourceConfig = DATASET_CONFIG[item.datasetKey] || DATASET_CONFIG.sport_etudes;
+    const distanceLine = Number.isFinite(item.distanceKm)
+      ? `<p class="meta"><strong>Distance :</strong> ${formatDistance(item.distanceKm)}</p>`
+      : "";
 
     li.innerHTML = `
       <h2>${escapeHtml(item.nom_etablissement || "Établissement inconnu")}</h2>
-      <p class="meta"><strong>Distance :</strong> ${formatDistance(item.distanceKm)}</p>
+      <p class="meta inline-row"><strong>Source :</strong> <span class="badge ${sourceConfig.sourceClass}">${escapeHtml(
+      sourceConfig.label
+    )}</span></p>
+      ${distanceLine}
       <p class="meta inline-row"><strong>Type :</strong> <span class="badge ${typeClass}">${escapeHtml(
       type
     )}</span></p>
@@ -617,4 +796,19 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+initializeDefaultView();
+
+async function initializeDefaultView() {
+  setLoading(true);
+  clearResults();
+  latestUserPosition = null;
+  try {
+    await loadInstitutionsForCurrentMode(null);
+  } catch (error) {
+    setStatus(error.message || "Une erreur est survenue.");
+  } finally {
+    setLoading(false);
+  }
 }

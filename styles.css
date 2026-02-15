@@ -89,6 +89,11 @@ select {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 input::placeholder {
   color: #90a0b8;
 }
@@ -257,6 +262,23 @@ button:disabled {
   gap: 12px;
 }
 
+.list-controls {
+  margin-top: 10px;
+}
+
+.load-more {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #c8d8f4;
+  background: #eef4ff;
+  color: #234f96;
+  box-shadow: none;
+}
+
+.load-more:hover {
+  background: #e3edff;
+}
+
 .map-section {
   margin-top: 16px;
   padding: 12px;
@@ -335,6 +357,18 @@ button:disabled {
   background: #f1f4f8;
   color: #55657e;
   border-color: #d4ddeb;
+}
+
+.badge-source-sport-etudes {
+  background: #e8f0ff;
+  color: #1c4dab;
+  border-color: #c3d4fb;
+}
+
+.badge-source-sections {
+  background: #e8fbf4;
+  color: #17654a;
+  border-color: #bfead8;
 }
 
 .chips {
@@ -529,7 +563,7 @@ button:disabled {
   }
 
   .filters {
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
     align-items: end;
     column-gap: 10px;
   }

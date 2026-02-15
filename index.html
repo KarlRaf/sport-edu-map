@@ -42,6 +42,14 @@
 
       <section class="filters" aria-label="Filtres">
         <div class="filter-field">
+          <label for="filter-dataset">Source de données</label>
+          <select id="filter-dataset" name="filter-dataset">
+            <option value="sport_etudes" selected>Sport-études</option>
+            <option value="sections_sportives">Sections sportives scolaires</option>
+            <option value="all">Toutes les sources</option>
+          </select>
+        </div>
+        <div class="filter-field">
           <label for="filter-type">Type d'établissement</label>
           <select id="filter-type" name="filter-type">
             <option value="all">Tous</option>
@@ -53,11 +61,24 @@
             <option value="all">Tous</option>
           </select>
         </div>
+        <div class="filter-field">
+          <label for="filter-count">Nombre de résultats</label>
+          <select id="filter-count" name="filter-count">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
+        </div>
         <button id="clear-filters" type="button" class="clear-filters">Réinitialiser</button>
       </section>
 
       <section class="legend" aria-label="Légende des couleurs">
         <p class="legend-title">Légende</p>
+        <div class="legend-row">
+          <span class="legend-label">Source :</span>
+          <span class="badge badge-source-sport-etudes">Sport-études</span>
+          <span class="badge badge-source-sections">Sections sportives</span>
+        </div>
         <div class="legend-row">
           <span class="legend-label">Type :</span>
           <span class="badge badge-type-lycee">Lycée</span>
@@ -77,6 +98,9 @@
 
       <p id="status" class="status" aria-live="polite"></p>
       <ol id="results" class="results"></ol>
+      <div id="list-controls" class="list-controls hidden">
+        <button id="load-more" type="button" class="load-more">Charger plus</button>
+      </div>
       <section class="map-section">
         <h2 class="map-title">Carte des établissements proches</h2>
         <div id="map" class="map" aria-label="Carte des établissements"></div>
