@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sport Edu Map">
+  <rect width="64" height="64" rx="14" fill="#2563eb"/>
+  <path d="M14 40c6-8 12-12 18-12 5 0 9 2 13 6l5-6v24H14v-12z" fill="#ffffff"/>
+  <circle cx="43" cy="21" r="6" fill="#14b8a6"/>
+</svg>

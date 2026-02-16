@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Sport Edu Map">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eaf1ff"/>
+      <stop offset="100%" stop-color="#f8fbff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="80" y="80" width="1040" height="470" rx="28" fill="#ffffff" stroke="#dbe5f4"/>
+  <text x="140" y="220" fill="#0f172a" font-size="62" font-family="Inter, Arial, sans-serif" font-weight="700">Sport Edu Map</text>
+  <text x="140" y="280" fill="#475a79" font-size="34" font-family="Inter, Arial, sans-serif">Trouver les établissements sportifs scolaires proches</text>
+  <circle cx="930" cy="230" r="56" fill="#2563eb"/>
+  <path d="M870 390c54-76 104-114 151-114 41 0 74 18 109 52l41-52v220H870V390z" fill="#14b8a6"/>
+</svg>

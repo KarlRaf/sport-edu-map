@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sport-edu-map.vercel.app/sitemap.xml
