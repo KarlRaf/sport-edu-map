@@ -1,0 +1,25 @@
+{
+  "name": "sport-edu-map",
+  "version": "1.0.0",
+  "description": "Application web (FR) pour trouver les établissements sport-études les plus proches d'une adresse en France.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarlRaf/sport-edu-map.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/KarlRaf/sport-edu-map/issues"
+  },
+  "homepage": "https://github.com/KarlRaf/sport-edu-map#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
