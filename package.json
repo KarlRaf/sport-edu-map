@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/KarlRaf/sport-edu-map#readme",
   "dependencies": {
-    "@vercel/analytics": "^2.0.1"
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
